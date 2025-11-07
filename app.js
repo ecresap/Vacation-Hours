@@ -1,4 +1,4 @@
-/* Vacation Balance Planner — app.js (clean, fixed, minimal) */
+/* Vacation Balance Planner — app.js (mobile-friendly, split charts, tests) */
 
 /* ========== Utilities ========== */
 const MS_PER_DAY = 86400000;
@@ -421,15 +421,31 @@ function wireUIEvents() {
   document.addEventListener("click", (e) => {
     if (e.target && e.target.id === "tabForecast") switchTab("Forecast");
     if (e.target && e.target.id === "tabOverview") switchTab("Overview");
-    if (e.target && e.target.id === "regenForecast") drawForecast();
+    if (e.target && e.target.id === "regenForecast") {
+      if (document.body.dataset.mode === "split") drawForecastSplit();
+      else drawForecastYear();
+    }
     if (e.target && e.target.id === "exportForecastCsv") exportForecastCsv();
+    if (e.target && e.target.id === "modeYear") {
+      document.body.dataset.mode = "year";
+      document.getElementById("forecastYearWrap").classList.remove("hidden");
+      document.getElementById("forecastSplitWrap").classList.add("hidden");
+      drawForecastYear();
+    }
+    if (e.target && e.target.id === "modeSplit") {
+      document.body.dataset.mode = "split";
+      document.getElementById("forecastYearWrap").classList.add("hidden");
+      document.getElementById("forecastSplitWrap").classList.remove("hidden");
+      drawForecastSplit();
+    }
   });
   window.addEventListener("resize", () => {
     const tForecast = document.getElementById("tab-Forecast");
-    if (!tForecast.classList.contains("hidden")) drawForecast();
+    if (!tForecast.classList.contains("hidden")) {
+      if (document.body.dataset.mode === "split") drawForecastSplit();
+      else drawForecastYear();
+    }
   });
-  const canvasEl = document.getElementById("forecastCanvas");
-  if (canvasEl) canvasEl.addEventListener("mousemove", handleHover);
 }
 
 /* ========== Tabs & Forecast Chart (Canvas) ========== */
@@ -446,7 +462,10 @@ function switchTab(tab) {
     bForecast.classList.add(...active.split(" "));
     bOverview.classList.remove(...active.split(" "));
     bOverview.classList.add(...inactive.split(" "));
-    setTimeout(drawForecast, 0);
+    setTimeout(() => {
+      if (document.body.dataset.mode === "split") drawForecastSplit();
+      else drawForecastYear();
+    }, 0);
   } else {
     tForecast.classList.add("hidden");
     tOverview.classList.remove("hidden");
@@ -455,18 +474,16 @@ function switchTab(tab) {
     bForecast.classList.add(...inactive.split(" "));
   }
 }
-const $canvas = () => document.getElementById("forecastCanvas");
-function generateForecastSeries(days = 365) {
-  const today = clampToDateOnly(new Date());
+const $canvas = (id) => document.getElementById(id);
+function generateForecastSeries(startDate, days) {
   const series = [];
   for (let i = 0; i <= days; i++) {
-    const d = addDays(today, i);
+    const d = addDays(startDate, i);
     series.push({ date: d, y: getBalanceOn(ymd(d)) });
   }
   return series;
 }
-function drawForecast() {
-  const canvas = $canvas();
+function drawLineChart(canvas, series) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   const ratio = window.devicePixelRatio || 1;
@@ -477,19 +494,18 @@ function drawForecast() {
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.clearRect(0, 0, widthCss, heightCss);
 
-  const data = generateForecastSeries(365);
-  if (!data.length) return;
+  if (!series.length) return;
 
   const pad = { l: 48, r: 12, t: 12, b: 28 };
   const W = widthCss - pad.l - pad.r;
   const H = heightCss - pad.t - pad.b;
 
-  let yMin = Math.min(...data.map((p) => p.y));
-  let yMax = Math.max(...data.map((p) => p.y));
+  let yMin = Math.min(...series.map((p) => p.y));
+  let yMax = Math.max(...series.map((p) => p.y));
   const padY = (yMax - yMin) * 0.05 || 1;
   yMin -= padY; yMax += padY;
 
-  const xs = (i) => pad.l + (i / (data.length - 1)) * W;
+  const xs = (i) => pad.l + (i / (series.length - 1)) * W;
   const ys = (v) => pad.t + (1 - (v - yMin) / (yMax - yMin || 1)) * H;
 
   // Axes
@@ -517,8 +533,8 @@ function drawForecast() {
   }
 
   // Month grid + labels
-  for (let i = 0; i < data.length; i++) {
-    const d = data[i].date;
+  for (let i = 0; i < series.length; i++) {
+    const d = series[i].date;
     if (d.getUTCDate() === 1) {
       const x = xs(i);
       ctx.strokeStyle = "#f3f4f6";
@@ -536,55 +552,86 @@ function drawForecast() {
   ctx.strokeStyle = "#111827";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(xs(0), ys(data[0].y));
-  for (let i = 1; i < data.length; i++) ctx.lineTo(xs(i), ys(data[i].y));
+  ctx.moveTo(xs(0), ys(series[0].y));
+  for (let i = 1; i < series.length; i++) ctx.lineTo(xs(i), ys(series[i].y));
   ctx.stroke();
 
-  // Payday markers + labels (net balance at each payday)
-  const today = clampToDateOnly(new Date());
-  const horizonEnd = addDays(today, 365);
+  canvas._forecastData = { series, pad, W, H, yMin, yMax };
+}
+function labelPaydays(canvas, seriesStart, series) {
+  if (!canvas || !canvas._forecastData) return;
+  const { pad, W, yMin, yMax } = canvas._forecastData;
+  const ctx = canvas.getContext("2d");
+  const xs = (i) => pad.l + (i / (series.length - 1)) * W;
+  const ys = (v) => pad.t + (1 - (v - yMin) / (yMax - yMin || 1)) * (canvas._forecastData.H);
+
+  const horizonEnd = addDays(seriesStart, series.length - 1);
   const paydays = getPaydaysBetween(
-    today, horizonEnd, toDateOnlyUTC(state.firstPayday), Number(state.payFrequencyDays) || 14
+    seriesStart,
+    horizonEnd,
+    toDateOnlyUTC(state.firstPayday),
+    Number(state.payFrequencyDays) || 14
   );
+
   ctx.fillStyle = "#111827";
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
   ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+
   for (const pay of paydays) {
-    const idx = daysBetween(today, pay);
-    if (idx < 0 || idx >= data.length) continue;
+    const idx = daysBetween(seriesStart, pay);
+    if (idx < 0 || idx >= series.length) continue;
     const x = xs(idx);
-    const y = ys(data[idx].y);
+    const y = ys(series[idx].y);
     ctx.beginPath();
     ctx.arc(x, y, 2.5, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillText(data[idx].y.toFixed(2), x, y - 6);
+    ctx.fillText(series[idx].y.toFixed(2), x, y - 6);
   }
-
-  canvas._forecastData = { data, pad, W, H, yMin, yMax };
 }
-function handleHover(event) {
-  const canvas = $canvas();
+function drawForecastYear() {
+  const today = clampToDateOnly(new Date());
+  const series = generateForecastSeries(today, 365);
+  const canvas = $canvas("forecastCanvasYear");
+  drawLineChart(canvas, series);
+  labelPaydays(canvas, today, series);
+  canvas.addEventListener("mousemove", (ev) => handleHover(ev, canvas, "forecastHoverYear"));
+}
+function drawForecastSplit() {
+  const today = clampToDateOnly(new Date());
+  const mid = addDays(today, 182);
+  const s1 = generateForecastSeries(today, 182);
+  const s2 = generateForecastSeries(mid, 365 - 182);
+  const c1 = $canvas("forecastCanvasH1");
+  const c2 = $canvas("forecastCanvasH2");
+  drawLineChart(c1, s1); labelPaydays(c1, today, s1);
+  drawLineChart(c2, s2); labelPaydays(c2, mid, s2);
+  c1.addEventListener("mousemove", (ev) => handleHover(ev, c1, "forecastHoverH1"));
+  c2.addEventListener("mousemove", (ev) => handleHover(ev, c2, "forecastHoverH2"));
+}
+function handleHover(event, canvas, hoverId) {
   if (!canvas || !canvas._forecastData) return;
-  const { data, pad, W } = canvas._forecastData;
+  const { series, pad, W } = canvas._forecastData;
   const rect = canvas.getBoundingClientRect();
   const xCss = event.clientX - rect.left;
-  const i = Math.round(((xCss - pad.l) / W) * (data.length - 1));
-  const idx = Math.min(Math.max(i, 0), data.length - 1);
-  const p = data[idx];
-  document.getElementById("forecastHover").textContent =
-    `${p.date.toISOString().slice(0, 10)} → ${p.y.toFixed(2)} h`;
+  const i = Math.round(((xCss - pad.l) / W) * (series.length - 1));
+  const idx = Math.min(Math.max(i, 0), series.length - 1);
+  const p = series[idx];
+  const hoverEl = document.getElementById(hoverId);
+  if (hoverEl) hoverEl.textContent = `${p.date.toISOString().slice(0, 10)} → ${p.y.toFixed(2)} h`;
 }
 function exportForecastCsv() {
-  const canvas = $canvas();
+  const canvas = document.body.dataset.mode === "split"
+    ? $canvas("forecastCanvasH1")
+    : $canvas("forecastCanvasYear");
   if (!canvas || !canvas._forecastData) return;
-  const { data } = canvas._forecastData;
+  const { series } = canvas._forecastData;
   const rows = ["date,hours"];
-  for (const p of data) rows.push(`${p.date.toISOString().slice(0, 10)},${p.y.toFixed(2)}`);
+  for (const p of series) rows.push(`${p.date.toISOString().slice(0, 10)},${p.y.toFixed(2)}`);
   const blob = new Blob([rows.join("\n")], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = "vacation_forecast_365.csv";
+  a.href = url; a.download = "vacation_forecast.csv";
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
@@ -594,8 +641,7 @@ function exportForecastCsv() {
   if (!state.payFrequencyDays) state.payFrequencyDays = 14;
   renderAll();
   wireUIEvents();
-  const canvasEl = document.getElementById("forecastCanvas");
-  if (canvasEl) canvasEl.addEventListener("mousemove", handleHover);
+  document.body.dataset.mode = document.body.dataset.mode || "year";
   runTests();
 })();
 
