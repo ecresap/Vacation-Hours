@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vacation Balance Planner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body { height: 100%; }
+    input[type="number"] { appearance: textfield; }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <div class="max-w-6xl mx-auto p-4 md:p-6">
+    <header class="mb-6">
+      <h1 class="text-2xl md:text-3xl font-bold">Vacation Balance Planner</h1>
+      <p class="text-sm text-gray-600">Interactive tracker for accruals, PTO ranges, floating-holiday credits, and projections. Data saves to your browser.</p>
+    </header>
+
+    <!-- Tabs -->
+    <div class="mb-4 flex gap-2">
+      <button id="tabOverview" class="tabbtn rounded-xl px-3 py-2 text-sm font-medium bg-gray-900 text-white">Overview</button>
+      <button id="tabForecast" class="tabbtn rounded-xl px-3 py-2 text-sm font-medium bg-white border">365-Day Forecast</button>
+    </div>
+
+    <!-- OVERVIEW TAB -->
+    <div id="tab-Overview">
+      <!-- Settings -->
+      <section class="bg-white shadow rounded-2xl p-4 md:p-6 mb-6">
+        <h2 class="text-xl font-semibold mb-4">Settings</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <label class="block">
+            <span class="text-sm text-gray-600">Start date</span>
+            <input id="startDate" type="date" class="mt-1 w-full rounded-xl border border-gray-300 p-2" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-gray-600">Starting balance (hours)</span>
+            <input id="startBalance" type="number" step="0.01" class="mt-1 w-full rounded-xl border border-gray-300 p-2" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-gray-600">Accrual per pay period (hours)</span>
+            <input id="accrualPerPeriod" type="number" step="0.01" class="mt-1 w-full rounded-xl border border-gray-300 p-2" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-gray-600">First payday (start of accrual schedule)</span>
+            <input id="firstPayday" type="date" class="mt-1 w-full rounded-xl border border-gray-300 p-2" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-gray-600">Pay frequency (days)</span>
+            <input id="payFrequencyDays" type="number" step="1" min="1" class="mt-1 w-full rounded-xl border border-gray-300 p-2" />
+          </label>
+          <div class="flex items-end gap-2">
+            <button id="saveSettings" class="w-full md:w-auto rounded-xl bg-blue-600 text-white px-4 py-2 font-medium shadow hover:bg-blue-700">Save</button>
+            <button id="recalc" class="w-full md:w-auto rounded-xl border border-gray-300 px-4 py-2 font-medium">Recalculate</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Dashboard -->
+      <section class="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white shadow rounded-2xl p-4">
+          <div class="text-sm text-gray-500">Balance as of <span id="todayLabel"></span></div>
+          <div id="balanceToday" class="text-2xl font-semibold mt-1">0.00 h</div>
+        </div>
+        <div class="bg-white shadow rounded-2xl p-4">
+          <div class="text-sm text-gray-500">Balance after latest planned PTO</div>
+          <div id="balanceAfterLatest" class="text-2xl font-semibold mt-1">0.00 h</div>
+        </div>
+        <div class="bg-white shadow rounded-2xl p-4">
+          <div class="text-sm text-gray-500">Total planned PTO (future)</div>
+          <div id="totalFuturePTO" class="text-2xl font-semibold mt-1">0.00 h</div>
+        </div>
+        <div class="bg-white shadow rounded-2xl p-4">
+          <div class="text-sm text-gray-500">Next paycheck (live)</div>
+          <div id="nextPayday" class="text-2xl font-semibold mt-1">—</div>
+        </div>
+      </section>
+
+      <!-- On-demand projection -->
+      <section class="bg-white shadow rounded-2xl p-4 md:p-6 mb-6">
+        <h2 class="text-xl font-semibold mb-4">Projection</h2>
+        <div class="flex flex-col md:flex-row md:items-end gap-4">
+          <label class="block">
+            <span class="text-sm text-gray-600">Show balance on date</span>
+            <input id="projectionDate" type="date" class="mt-1 w-full rounded-xl border border-gray-300 p-2" />
+          </label>
+          <button id="computeProjection" class="rounded-xl bg-emerald-600 text-white px-4 py-2 font-medium shadow hover:bg-emerald-700">Calculate</button>
+          <div class="text-xl font-semibold" id="projectionResult"></div>
+        </div>
+      </section>
+
+      <!-- PTO ranges -->
+      <section class="bg-white shadow rounded-2xl p-4 md:p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold">Planned Time Off (Ranges)</h2>
+          <div class="flex gap-2">
+            <button id="exportBtn" class="rounded-xl border border-gray-300 px-3 py-2 text-sm">Export</button>
+            <label class="rounded-xl border border-gray-300 px-3 py-2 text-sm cursor-pointer">
+              Import <input id="importInput" type="file" accept="application/json" class="hidden" />
+            </label>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
+          <label class="block">
+            <span class="text-sm text-gray-600">From</span>
+            <input id="ptoFrom" type="date" class="mt-1 w-full rounded-xl border border-gray-300 p-2" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-gray-600">To</span>
+            <input id="ptoTo" type="date" class="mt-1 w-full rounded-xl border border-gray-300 p-2" />
+          </label>
+          <div class="md:col-span-2">
+            <span class="text-sm text-gray-600">Note (optional)</span>
+            <input id="ptoNote" type="text" placeholder="Trip, appointment, etc." class="mt-1 w-full rounded-xl border border-gray-300 p-2" />
+          </div>
+          <div>
+            <span class="text-sm text-gray-600">Calculated hours</span>
+            <input id="ptoCalcHours" type="number" step="0.01" class="mt-1 w-full rounded-xl border border-gray-300 p-2 bg-gray-100" readonly />
+          </div>
+          <div class="flex items-end">
+            <button id="addPTO" class="w-full rounded-xl bg-gray-900 text-white px-4 py-2 font-medium shadow hover:bg-black">Add PTO</button>
+          </div>
+        </div>
+
+        <p class="text-xs text-gray-500 mb-2">Each workday (Mon–Fri) counts as 8 hours. U.S. federal holidays (observed) are excluded automatically.</p>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-600">
+                <th class="py-2">From</th>
+                <th class="py-2">To</th>
+                <th class="py-2">Hours</th>
+                <th class="py-2">Note</th>
+                <th class="py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="ptoTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Credits -->
+      <section class="bg-white shadow rounded-2xl p-4 md:p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Additional PTO Credits (Floating Holidays, Awards, etc.)</h2>
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+          <label class="block">
+            <span class="text-sm text-gray-600">Date</span>
+            <input id="creditDate" type="date" class="mt-1 w-full rounded-xl border border-gray-300 p-2" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-gray-600">Hours to add</span>
+            <input id="creditHours" type="number" step="0.01" class="mt-1 w-full rounded-xl border border-gray-300 p-2" />
+          </label>
+          <label class="block md:col-span-2">
+            <span class="text-sm text-gray-600">Note</span>
+            <input id="creditNote" type="text" placeholder="Floating holiday, adjustment, etc." class="mt-1 w-full rounded-xl border border-gray-300 p-2" />
+          </label>
+          <div class="flex items-end">
+            <button id="addCredit" class="w-full rounded-xl bg-indigo-600 text-white px-4 py-2 font-medium shadow hover:bg-indigo-700">Add Credit</button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-600">
+                <th class="py-2">Date</th>
+                <th class="py-2">Hours</th>
+                <th class="py-2">Note</th>
+                <th class="py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="creditTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- FORECAST TAB -->
+    <div id="tab-Forecast" class="hidden">
+      <section class="bg-white shadow rounded-2xl p-4 md:p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold">365-Day Forecast (Net Balance)</h2>
+          <div class="flex gap-2">
+            <button id="regenForecast" class="rounded-xl border px-3 py-2 text-sm">Refresh</button>
+            <button id="exportForecastCsv" class="rounded-xl border px-3 py-2 text-sm">CSV</button>
+          </div>
+        </div>
+        <canvas id="forecastCanvas" class="w-full h-64 md:h-80"></canvas>
+        <div id="forecastHover" class="mt-3 text-sm text-gray-600">Hover the chart for exact values.</div>
+      </section>
+    </div>
+
+    <footer class="text-xs text-gray-500 mb-8">Accruals post on scheduled paydays. PTO subtracts on each included workday within a range (federal holidays observed). All dates treated as UTC to avoid timezone issues.</footer>
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
