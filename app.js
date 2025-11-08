@@ -25,6 +25,14 @@ function fmt(hours) {
   return `${(Math.round(hours * 100) / 100).toFixed(2)} h`;
 }
 
+// Convert a Date object to a YYYY-MM-DD string in UTC.  This helper was
+// referenced throughout the code but was previously undefined, causing the
+// script to break.  It returns a simple date string without time and is
+// used for keys, labels, and comparisons.
+function ymd(date) {
+  return date.toISOString().slice(0, 10);
+}
+
 // Normalize a Date (or date string) to a UTC date (00:00:00Z)
 function toDateOnlyUTC(value) {
   if (!value) return null;
@@ -525,18 +533,29 @@ function drawLineChart(canvas, series) {
     ctx.stroke();
     ctx.fillText(val.toFixed(1), 4, y + 4);
   }
-  // Month separators and labels
+  // Month separators and labels (display month/day and angle the text downward)
   for (let i = 0; i < series.length; i++) {
     const d = series[i].date;
+    // Place tick at the first day of each month
     if (d.getUTCDate() === 1) {
       const x = xs(i);
+      // draw vertical grid line
       ctx.strokeStyle = '#f3f4f6';
       ctx.beginPath();
       ctx.moveTo(x, pad.t);
       ctx.lineTo(x, pad.t + H);
       ctx.stroke();
+      // format label as M/D without the year and rotate it slightly
+      const month = d.getUTCMonth() + 1;
+      const day = d.getUTCDate();
+      const label = `${month}/${day}`;
       ctx.fillStyle = '#6b7280';
-      ctx.fillText(d.toISOString().slice(0, 7), x - 14, pad.t + H + 18);
+      ctx.save();
+      // translate to the x position and below the chart, then rotate
+      ctx.translate(x, pad.t + H + 22);
+      ctx.rotate(-Math.PI / 4); // 45 degrees downward
+      ctx.fillText(label, 0, 0);
+      ctx.restore();
     }
   }
   // Line path
@@ -572,7 +591,9 @@ function labelPaydays(canvas, seriesStart, series) {
     ctx.beginPath();
     ctx.arc(x, y, 2.5, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillText(series[idx].y.toFixed(2), x, y - 6);
+    // Display whole hours rounded down (floor) for accrual labels
+    const wholeHours = Math.floor(series[idx].y);
+    ctx.fillText(String(wholeHours), x, y - 6);
   }
 }
 
