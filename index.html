@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vacation Balance Planner</title>
+  <meta name="color-scheme" content="light dark" />
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     html, body { height: 100%; }
@@ -16,13 +17,13 @@
   <div class="max-w-6xl mx-auto p-4 md:p-6">
     <header class="mb-6">
       <h1 class="text-2xl md:text-3xl font-bold">Vacation Balance Planner</h1>
-      <p class="text-sm text-gray-600">Interactive tracker for accruals, PTO ranges, floating-holiday credits, and projections. Data saves to your browser.</p>
+      <p class="text-sm text-gray-600">Accruals, PTO ranges, floating-holiday credits, and projections. Data saves to your browser.</p>
     </header>
 
     <!-- Tabs -->
-    <div class="mb-4 flex gap-2">
+    <div class="mb-4 flex gap-2 sticky top-0 bg-gray-50/80 backdrop-blur z-10 py-2">
       <button id="tabOverview" class="tabbtn rounded-xl px-3 py-2 text-sm font-medium bg-gray-900 text-white">Overview</button>
-      <button id="tabForecast" class="tabbtn rounded-xl px-3 py-2 text-sm font-medium bg-white border">365-Day Forecast</button>
+      <button id="tabForecast" class="tabbtn rounded-xl px-3 py-2 text-sm font-medium bg-white border text-gray-900">Forecast</button>
     </div>
 
     <!-- OVERVIEW TAB -->
@@ -91,7 +92,7 @@
         </div>
       </section>
 
-      <!-- PTO ranges -->
+      <!-- PTO Ranges planner -->
       <section class="bg-white shadow rounded-2xl p-4 md:p-6 mb-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-xl font-semibold">Planned Time Off (Ranges)</h2>
@@ -125,7 +126,7 @@
           </div>
         </div>
 
-        <p class="text-xs text-gray-500 mb-2">Each workday (Mon–Fri) counts as 8 hours. U.S. federal holidays (observed) are excluded automatically.</p>
+        <p class="text-xs text-gray-500 mb-2">Each workday (Mon–Fri) counts as 8 hours. Weekends don’t count. (Add any holidays manually.)</p>
 
         <div class="overflow-x-auto">
           <table class="min-w-full text-sm">
@@ -143,7 +144,7 @@
         </div>
       </section>
 
-      <!-- Credits -->
+      <!-- Additional PTO credits (e.g., floating holidays) -->
       <section class="bg-white shadow rounded-2xl p-4 md:p-6 mb-8">
         <h2 class="text-xl font-semibold mb-4">Additional PTO Credits (Floating Holidays, Awards, etc.)</h2>
         <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
@@ -183,19 +184,41 @@
     <!-- FORECAST TAB -->
     <div id="tab-Forecast" class="hidden">
       <section class="bg-white shadow rounded-2xl p-4 md:p-6 mb-6">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-semibold">365-Day Forecast (Net Balance)</h2>
+        <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <h2 class="text-xl font-semibold">Forecast (Phone-friendly)</h2>
           <div class="flex gap-2">
+            <button id="modeYear" class="rounded-xl border px-3 py-2 text-sm">Year</button>
+            <button id="modeSplit" class="rounded-xl border px-3 py-2 text-sm">2 × 6 months</button>
             <button id="regenForecast" class="rounded-xl border px-3 py-2 text-sm">Refresh</button>
             <button id="exportForecastCsv" class="rounded-xl border px-3 py-2 text-sm">CSV</button>
           </div>
         </div>
-        <canvas id="forecastCanvas" class="w-full h-64 md:h-80"></canvas>
-        <div id="forecastHover" class="mt-3 text-sm text-gray-600">Hover the chart for exact values.</div>
+
+        <!-- Year view -->
+        <div id="forecastYearWrap">
+          <canvas id="forecastCanvasYear" class="w-full h-56 md:h-80"></canvas>
+          <div id="forecastHoverYear" class="mt-2 text-sm text-gray-600">Hover/tap for exact values.</div>
+        </div>
+
+        <!-- Split view: two 6-month charts -->
+        <div id="forecastSplitWrap" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div>
+            <div class="text-sm text-gray-700 mb-1">Months 1–6</div>
+            <canvas id="forecastCanvasH1" class="w-full h-56 md:h-72"></canvas>
+            <div id="forecastHoverH1" class="mt-2 text-sm text-gray-600">Hover/tap for exact values.</div>
+          </div>
+          <div>
+            <div class="text-sm text-gray-700 mb-1">Months 7–12</div>
+            <canvas id="forecastCanvasH2" class="w-full h-56 md:h-72"></canvas>
+            <div id="forecastHoverH2" class="mt-2 text-sm text-gray-600">Hover/tap for exact values.</div>
+          </div>
+        </div>
       </section>
     </div>
 
-    <footer class="text-xs text-gray-500 mb-8">Accruals post on scheduled paydays. PTO subtracts on each included workday within a range (federal holidays observed). All dates treated as UTC to avoid timezone issues.</footer>
+    <footer class="text-xs text-gray-500 mb-8">
+      Accruals post on scheduled paydays. PTO subtracts on each included workday within a range (Mon–Fri). All dates treated as UTC to avoid timezone issues.
+    </footer>
   </div>
 
   <script src="app.js" defer></script>
